@@ -193,22 +193,27 @@ func (msg *Message) FillBody(val interface{}) *Message {
 
 func (msg Message) MarshalJSON() ([]byte, error) {
 	tmp := struct {
-		Header  MessageHeader `json:"header"`
-		Router  MessageRoute  `json:"route,omitempty"`
-		Content interface{}   `json:"content"`
+		Header      MessageHeader  `json:"header"`
+		Router      MessageRoute   `json:"route,omitempty"`
+		ContentType string         `json:"content_type,omitempty"`
+		Content     json.Marshaler `json:"content"`
 	}{
-		Header:  msg.Header,
-		Router:  msg.Router,
-		Content: msg.Content,
+		Header: msg.Header,
+		Router: msg.Router,
+	}
+	if msg.Content != nil {
+		tmp.ContentType, _ = defaultRegistry.GetName(msg.Content)
+		tmp.Content = msg.Content
 	}
 	return json.Marshal(tmp)
 }
 
 func (msg *Message) UnmarshalJSON(data []byte) error {
 	tmp := struct {
-		Header  MessageHeader `json:"header"`
-		Router  MessageRoute  `json:"route,omitempty"`
-		Content interface{}   `json:"content"`
+		Header      MessageHeader   `json:"header"`
+		Router      MessageRoute    `json:"route,omitempty"`
+		ContentType string          `json:"content_type,omitempty"`
+		Content     json.RawMessage `json:"content"`
 	}{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
@@ -217,7 +222,12 @@ func (msg *Message) UnmarshalJSON(data []byte) error {
 	msg.Header = tmp.Header
 	msg.Router = tmp.Router
 	if tmp.Content != nil {
-		msg.Content = NewContent(tmp.Content)
+		content := defaultRegistry.New(tmp.ContentType)
+		err := json.Unmarshal(tmp.Content, &content)
+		if err != nil {
+			return err
+		}
+		msg.Content = NewContent(content)
 	}
 	return nil
 }
